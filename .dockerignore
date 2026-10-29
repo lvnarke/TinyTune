@@ -1,0 +1,13 @@
+.git
+.env
+*.zip
+__pycache__/
+*.py[cod]
+docs/
+evidence/
+grafana/
+k6/
+nginx/
+prometheus/
+results/
+

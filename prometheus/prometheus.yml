@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: tinytune-api
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 8000
+        refresh_interval: 2s
+    metrics_path: /metrics
+
+  - job_name: tinytune-worker
+    dns_sd_configs:
+      - names: [worker]
+        type: A
+        port: 9000
+        refresh_interval: 2s
+    metrics_path: /metrics
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
+

@@ -1,0 +1,181 @@
+name: tinytune
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://${POSTGRES_USER:-tinytune}:${POSTGRES_PASSWORD:-tinytune-local-only}@postgres:5432/${POSTGRES_DB:-tinytune}
+  REDIS_URL: redis://redis:6379/0
+  DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
+  DB_ACQUIRE_TIMEOUT_SECONDS: ${DB_ACQUIRE_TIMEOUT_SECONDS:-1.0}
+  CACHE_ENABLED: ${CACHE_ENABLED:-true}
+  CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-30}
+  PLAY_MODE: ${PLAY_MODE:-async}
+  WORKER_PROCESSING_DELAY_MS: ${WORKER_PROCESSING_DELAY_MS:-25}
+  WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-25}
+  WORKER_CLAIM_IDLE_MS: ${WORKER_CLAIM_IDLE_MS:-5000}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SUCCESS_LOG_SAMPLE_RATE: ${SUCCESS_LOG_SAMPLE_RATE:-0.01}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+  TOOLS_ORIGIN: ${TOOLS_ORIGIN:-http://localhost:8081}
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tinytune}
+      POSTGRES_USER: ${POSTGRES_USER:-tinytune}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinytune-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tinytune} -d ${POSTGRES_DB:-tinytune}"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  api:
+    build: .
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "9000"
+    restart: unless-stopped
+
+  load-runner:
+    build: .
+    command: ["python", "-m", "app.load_runner"]
+    environment: *app-environment
+    volumes:
+      - ./k6:/scripts:ro
+      - ./results:/results
+    depends_on:
+      redis:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy.conf:/etc/nginx/tinytune-proxy.conf:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - api
+      - worker
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
+  loadgen:
+    build: .
+    command: ["python", "scripts/load_test.py"]
+    environment:
+      <<: *app-environment
+      TARGET_URL: http://gateway:8080
+      TOOLS_URL: http://gateway:8081
+      RUN_LABEL: ${RUN_LABEL:-optimized}
+      STEP_RATES: ${STEP_RATES:-10,25,50,100,200,400}
+      STEP_DURATION_SECONDS: ${STEP_DURATION_SECONDS:-10}
+      P95_LIMIT_MS: ${P95_LIMIT_MS:-250}
+      ERROR_LIMIT_PERCENT: ${ERROR_LIMIT_PERCENT:-1}
+    volumes:
+      - ./results:/srv/tinytune/results
+    depends_on:
+      gateway:
+        condition: service_started
+    profiles: ["load"]
+
+  k6:
+    image: grafana/k6:0.54.0
+    entrypoint: ["k6", "run", "--quiet", "/scripts/saturation.js"]
+    environment:
+      BASE_URL: http://gateway:8080
+      K6_LOG_OUTPUT: none
+      K6_NO_USAGE_REPORT: "true"
+      RUN_LABEL: ${RUN_LABEL:-optimized}
+      STEP_RATES: ${STEP_RATES:-10,25,50,100,200,400}
+      STEP_DURATION_SECONDS: ${STEP_DURATION_SECONDS:-10}
+      P95_LIMIT_MS: ${P95_LIMIT_MS:-250}
+      ERROR_LIMIT_PERCENT: ${ERROR_LIMIT_PERCENT:-1}
+    volumes:
+      - ./k6:/scripts:ro
+      - ./results:/results
+    depends_on:
+      gateway:
+        condition: service_started
+    profiles: ["load"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+

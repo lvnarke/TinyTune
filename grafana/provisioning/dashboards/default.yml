@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: TinyTune
+    orgId: 1
+    folder: TinyTune
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 5
+    options:
+      path: /var/lib/grafana/dashboards
+

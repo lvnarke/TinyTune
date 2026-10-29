@@ -1,0 +1,125 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(rate(tinytune_http_requests_total[30s]))", "legendFormat": "requests/s", "refId": "A"}],
+      "title": "Request rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 250}, {"color": "red", "value": 500}]}, "unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "1000 * histogram_quantile(0.95, sum(rate(tinytune_http_request_duration_seconds_bucket[30s])) by (le))", "legendFormat": "p95", "refId": "A"}],
+      "title": "API p95 latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "100 * sum(rate(tinytune_http_requests_total{status=~\"5..\"}[30s])) / clamp_min(sum(rate(tinytune_http_requests_total[30s])), 0.001)", "legendFormat": "5xx", "refId": "A"}],
+      "title": "5xx error rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "max(tinytune_play_event_queue_depth)", "legendFormat": "events", "refId": "A"}],
+      "title": "Play-event queue depth",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "id": 5,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(rate(tinytune_http_requests_total[30s])) by (route)", "legendFormat": "{{route}}", "refId": "A"},
+        {"expr": "sum(rate(tinytune_worker_events_total{result=\"processed\"}[30s]))", "legendFormat": "worker processed/s", "refId": "B"}
+      ],
+      "title": "Throughput by route and worker",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "1000 * histogram_quantile(0.50, sum(rate(tinytune_http_request_duration_seconds_bucket[30s])) by (le))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "1000 * histogram_quantile(0.95, sum(rate(tinytune_http_request_duration_seconds_bucket[30s])) by (le))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "1000 * histogram_quantile(0.99, sum(rate(tinytune_http_request_duration_seconds_bucket[30s])) by (le))", "legendFormat": "p99", "refId": "C"}
+      ],
+      "title": "Latency percentiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "always", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 13},
+      "id": 7,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum(rate(tinytune_cache_operations_total[30s])) by (result)", "legendFormat": "{{result}}", "refId": "A"}],
+      "title": "Cache operations",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 13},
+      "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(tinytune_http_requests_in_progress)", "legendFormat": "in flight", "refId": "A"},
+        {"expr": "max(tinytune_play_event_queue_depth)", "legendFormat": "queue depth", "refId": "B"}
+      ],
+      "title": "Saturation signals",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 13},
+      "id": 9,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(increase(tinytune_db_pool_timeouts_total[30s]))", "legendFormat": "DB pool timeouts", "refId": "A"},
+        {"expr": "sum(increase(tinytune_worker_events_total{result=~\"failed|dead_lettered\"}[30s]))", "legendFormat": "worker failures", "refId": "B"}
+      ],
+      "title": "Failure signals",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["tinytune", "distributed-systems"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "TinyTune System",
+  "uid": "tinytune-system",
+  "version": 1,
+  "weekStart": ""
+}
+
